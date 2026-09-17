@@ -537,7 +537,10 @@ func glamourRender(m pagerModel, markdown string) (string, error) {
 	}
 
 	isCode := !utils.IsMarkdownFile(m.currentDocument.Note)
-	width := max(0, min(int(m.common.cfg.GlamourMaxWidth), m.viewport.Width())) //nolint:gosec
+	width := m.viewport.Width()
+	if m.common.cfg.GlamourMaxWidth > 0 && int(m.common.cfg.GlamourMaxWidth) < width {
+		width = int(m.common.cfg.GlamourMaxWidth) //nolint:gosec
+	}
 	if isCode {
 		width = 0
 	}
