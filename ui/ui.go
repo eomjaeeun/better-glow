@@ -192,8 +192,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.common.styles = newStyles(msg.IsDark())
 		m.stash.stylePaginators(m.common.styles)
 	case tea.KeyPressMsg:
+		// When pager is in search mode, let keys pass through to pager
+		pagerSearchActive := m.state == stateShowDocument &&
+			(m.pager.searchMode || m.pager.searchQuery != "")
+
 		switch msg.String() {
 		case "esc":
+			if pagerSearchActive {
+				break // let pager handle: cancel search or clear results
+			}
 			if m.state == stateShowDocument || m.stash.viewState == stashStateLoadingDocument {
 				batch := m.unloadDocument()
 				return m, tea.Batch(batch...)
@@ -201,7 +208,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "r":
 			var cmd tea.Cmd
 			if m.state == stateShowStash {
-				// pass through all keys if we're editing the filter
 				if m.stash.filterState == filtering {
 					m.stash, cmd = m.stash.update(msg)
 					return m, cmd
@@ -211,11 +217,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "q":
+			if m.pager.searchMode {
+				break // don't quit during search input
+			}
+
 			var cmd tea.Cmd
 
 			switch m.state { //nolint:exhaustive
 			case stateShowStash:
-				// pass through all keys if we're editing the filter
 				if m.stash.filterState == filtering {
 					m.stash, cmd = m.stash.update(msg)
 					return m, cmd
@@ -225,6 +234,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "left", "h", "delete":
+			if m.pager.searchMode {
+				break // let pager handle during search input
+			}
 			if m.state == stateShowDocument {
 				cmds = append(cmds, m.unloadDocument()...)
 				return m, tea.Batch(cmds...)
@@ -315,9 +327,7 @@ func (m model) View() tea.View {
 
 	v := tea.NewView(content)
 	v.AltScreen = true
-	if m.common.cfg.EnableMouse {
-		v.MouseMode = tea.MouseModeCellMotion
-	}
+	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
 

@@ -15,5 +15,5 @@ type Config struct {
 	Path string
 
 	// For debugging the UI
-	GlamourEnabled bool `env:"GLOW_ENABLE_GLAMOUR" envDefault:"true"`
+	GlamourEnabled bool `env:"BLOW_ENABLE_GLAMOUR" envDefault:"true"`
 }
