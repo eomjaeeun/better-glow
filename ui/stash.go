@@ -737,7 +737,7 @@ func (m stashModel) view() string {
 }
 
 func glowLogoView(styles Styles) string {
-	return styles.logoStyle.Render(" Glow ")
+	return styles.logoStyle.Render(" Blow ")
 }
 
 func (m stashModel) headerView() string {

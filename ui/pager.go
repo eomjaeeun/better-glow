@@ -54,6 +54,20 @@ type pagerModel struct {
 	currentDocument markdown
 
 	watcher *fsnotify.Watcher
+
+	// Text selection state
+	selecting    bool
+	selectStart  selectionPos
+	selectEnd    selectionPos
+	hasSelection bool
+	contentLines []string // cached rendered lines for selection text extraction
+
+	// Search state
+	searchMode      bool
+	searchInput     string
+	searchQuery     string
+	searchMatches   []searchMatch
+	currentMatchIdx int
 }
 
 func newPagerModel(common *commonModel) pagerModel {
@@ -83,6 +97,7 @@ func (m *pagerModel) setSize(w, h int) {
 
 func (m *pagerModel) setContent(s string) {
 	m.viewport.SetContent(s)
+	m.contentLines = strings.Split(s, "\n")
 }
 
 func (m *pagerModel) toggleHelp() {
@@ -134,9 +149,97 @@ func (m pagerModel) update(msg tea.Msg) (pagerModel, tea.Cmd) {
 	)
 
 	switch msg := msg.(type) {
+	case tea.MouseClickMsg:
+		if msg.Button == tea.MouseLeft && msg.Y < m.viewport.Height() {
+			contentLine := msg.Y + m.viewport.YOffset()
+			m.selecting = true
+			m.hasSelection = false
+			m.selectStart = selectionPos{Line: contentLine, Col: msg.X}
+			m.selectEnd = m.selectStart
+			return m, nil
+		}
+
+	case tea.MouseMotionMsg:
+		if m.selecting {
+			contentLine := msg.Y + m.viewport.YOffset()
+			m.selectEnd = selectionPos{Line: contentLine, Col: msg.X}
+			m.hasSelection = true
+			return m, nil
+		}
+
+	case tea.MouseReleaseMsg:
+		if m.selecting {
+			m.selecting = false
+			if m.hasSelection {
+				text := m.getSelectedText()
+				if text != "" {
+					termenv.Copy(text)
+					_ = clipboard.WriteAll(text)
+					cmds = append(cmds, m.showStatusMessage(pagerStatusMessage{"Copied selection", false}))
+				}
+			}
+			return m, tea.Batch(cmds...)
+		}
+
 	case tea.KeyPressMsg:
+		m.hasSelection = false
+		m.selecting = false
+
+		// Search input mode: capture all keys
+		if m.searchMode {
+			switch msg.String() {
+			case "enter":
+				m.searchQuery = m.searchInput
+				m.searchMode = false
+				m.findMatches()
+				if len(m.searchMatches) > 0 {
+					m.jumpToMatch(0)
+				} else if m.searchQuery != "" {
+					cmds = append(cmds, m.showStatusMessage(pagerStatusMessage{"No matches found", true}))
+				}
+			case keyEsc:
+				m.searchMode = false
+				m.searchInput = ""
+			case "backspace":
+				if len(m.searchInput) > 0 {
+					runes := []rune(m.searchInput)
+					m.searchInput = string(runes[:len(runes)-1])
+				}
+			default:
+				if msg.Text != "" {
+					m.searchInput += msg.Text
+				}
+			}
+			return m, tea.Batch(cmds...)
+		}
+
 		switch msg.String() {
-		case "q", keyEsc:
+		case "/":
+			m.searchMode = true
+			m.searchInput = ""
+			return m, nil
+		case "n":
+			if len(m.searchMatches) > 0 {
+				m.currentMatchIdx = (m.currentMatchIdx + 1) % len(m.searchMatches)
+				m.jumpToMatch(m.currentMatchIdx)
+				return m, nil
+			}
+		case "N":
+			if len(m.searchMatches) > 0 {
+				m.currentMatchIdx = (m.currentMatchIdx - 1 + len(m.searchMatches)) % len(m.searchMatches)
+				m.jumpToMatch(m.currentMatchIdx)
+				return m, nil
+			}
+		case keyEsc:
+			if m.searchQuery != "" {
+				m.clearSearch()
+				return m, nil
+			}
+			if m.state != pagerStateBrowse {
+				m.state = pagerStateBrowse
+				return m, nil
+			}
+		case "q":
 			if m.state != pagerStateBrowse {
 				m.state = pagerStateBrowse
 				return m, nil
@@ -212,7 +315,14 @@ func (m pagerModel) update(msg tea.Msg) (pagerModel, tea.Cmd) {
 
 func (m pagerModel) View() string {
 	var b strings.Builder
-	fmt.Fprint(&b, m.viewport.View()+"\n")
+
+	if m.hasSelection || m.selecting {
+		fmt.Fprint(&b, m.viewWithSelection()+"\n")
+	} else if len(m.searchMatches) > 0 {
+		fmt.Fprint(&b, m.viewWithSearch()+"\n")
+	} else {
+		fmt.Fprint(&b, m.viewport.View()+"\n")
+	}
 
 	// Footer
 	m.statusBarView(&b)
@@ -224,12 +334,76 @@ func (m pagerModel) View() string {
 	return b.String()
 }
 
+func (m pagerModel) viewWithSelection() string {
+	viewContent := m.viewport.View()
+	lines := strings.Split(viewContent, "\n")
+
+	start, end := normalizeSelection(m.selectStart, m.selectEnd)
+	offset := m.viewport.YOffset()
+
+	for i := range lines {
+		contentLine := offset + i
+		if contentLine < start.Line || contentLine > end.Line {
+			continue
+		}
+		if contentLine == start.Line && contentLine == end.Line {
+			lines[i] = highlightLine(lines[i], start.Col, end.Col)
+		} else if contentLine == start.Line {
+			lines[i] = highlightLine(lines[i], start.Col, -1)
+		} else if contentLine == end.Line {
+			lines[i] = highlightLine(lines[i], 0, end.Col)
+		} else {
+			lines[i] = highlightLine(lines[i], 0, -1)
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func (m pagerModel) getSelectedText() string {
+	if len(m.contentLines) == 0 {
+		return ""
+	}
+
+	start, end := normalizeSelection(m.selectStart, m.selectEnd)
+
+	var result strings.Builder
+	for i := start.Line; i <= end.Line && i < len(m.contentLines); i++ {
+		stripped := stripAnsi(m.contentLines[i])
+
+		if i == start.Line && i == end.Line {
+			result.WriteString(substringByWidth(stripped, start.Col, end.Col))
+		} else if i == start.Line {
+			result.WriteString(substringByWidth(stripped, start.Col, -1))
+			result.WriteRune('\n')
+		} else if i == end.Line {
+			result.WriteString(substringByWidth(stripped, 0, end.Col))
+		} else {
+			result.WriteString(stripped)
+			result.WriteRune('\n')
+		}
+	}
+
+	return result.String()
+}
+
 func (m pagerModel) statusBarView(b *strings.Builder) {
 	const (
 		minPercent               float64 = 0.0
 		maxPercent               float64 = 1.0
 		percentToStringMagnitude float64 = 100.0
 	)
+
+	// Search input bar
+	if m.searchMode {
+		searchBar := fmt.Sprintf(" /%s", m.searchInput)
+		cursor := "█"
+		padding := max(0, m.common.width-len([]rune(searchBar))-1)
+		searchLine := m.common.styles.statusBarMessageStyle(searchBar+cursor) +
+			m.common.styles.statusBarMessageStyle(strings.Repeat(" ", padding))
+		fmt.Fprint(b, searchLine)
+		return
+	}
 
 	showStatusMessage := m.state == pagerStateStatusMessage
 	styles := m.common.styles
@@ -258,6 +432,10 @@ func (m pagerModel) statusBarView(b *strings.Builder) {
 	var note string
 	if showStatusMessage {
 		note = m.statusMessage
+	} else if m.searchQuery != "" && len(m.searchMatches) > 0 {
+		note = fmt.Sprintf("[%d/%d] %q", m.currentMatchIdx+1, len(m.searchMatches), m.searchQuery)
+	} else if m.searchQuery != "" {
+		note = fmt.Sprintf("no match: %q", m.searchQuery)
 	} else {
 		note = m.currentDocument.Note
 	}
@@ -302,9 +480,9 @@ func (m pagerModel) helpView() (s string) {
 		"g/home  go to top",
 		"G/end   go to bottom",
 		"c       copy contents",
-		"e       edit this document",
-		"r       reload this document",
-		"esc     back to files",
+		"/       search",
+		"n/N     next/prev match",
+		"esc     clear search / back",
 		"q       quit",
 	}
 
@@ -359,7 +537,19 @@ func glamourRender(m pagerModel, markdown string) (string, error) {
 	}
 
 	isCode := !utils.IsMarkdownFile(m.currentDocument.Note)
-	width := max(0, min(int(m.common.cfg.GlamourMaxWidth), m.viewport.Width())) //nolint:gosec
+	width := m.viewport.Width()
+	if width <= 0 {
+		width = m.common.width
+	}
+	if width <= 0 && m.common.cfg.GlamourMaxWidth > 0 {
+		width = int(m.common.cfg.GlamourMaxWidth) //nolint:gosec
+	}
+	if width <= 0 {
+		width = 80
+	}
+	if m.common.cfg.GlamourMaxWidth > 0 && int(m.common.cfg.GlamourMaxWidth) < width {
+		width = int(m.common.cfg.GlamourMaxWidth) //nolint:gosec
+	}
 	if isCode {
 		width = 0
 	}

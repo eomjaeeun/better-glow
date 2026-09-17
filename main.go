@@ -45,10 +45,10 @@ var (
 	mouse            bool
 
 	rootCmd = &cobra.Command{
-		Use:   "glow [SOURCE|DIR]",
-		Short: "Render markdown on the CLI, with pizzazz!",
+		Use:   "blow [SOURCE|DIR]",
+		Short: "TUI markdown reader that doesn't fight tmux",
 		Long: paragraph(
-			fmt.Sprintf("\nRender markdown on the CLI, %s!", keyword("with pizzazz")),
+			"\nTUI markdown reader with in-pane text selection — a better glow for tmux workflows.",
 		),
 		SilenceErrors:    false,
 		SilenceUsage:     true,
@@ -198,9 +198,6 @@ func validateOptions(cmd *cobra.Command) error {
 				width = uint(w) //nolint:gosec
 			}
 
-			if width > 120 {
-				width = 120
-			}
 		}
 		if width == 0 {
 			width = 80
@@ -232,24 +229,22 @@ func execute(cmd *cobra.Command, args []string) error {
 	}
 
 	switch len(args) {
-	// TUI running on cwd
 	case 0:
 		return runTUI("", "")
 
-	// TUI with possible dir argument
 	case 1:
-		// Validate that the argument is a directory. If it's not treat it as
-		// an argument to the non-TUI version of Glow (via fallthrough).
+		// Local path (file or dir) → TUI mode
 		info, err := os.Stat(args[0])
-		if err == nil && info.IsDir() {
-			p, err := filepath.Abs(args[0])
-			if err == nil {
+		if err == nil {
+			p, _ := filepath.Abs(args[0])
+			if info.IsDir() {
 				return runTUI(p, "")
 			}
+			return runTUI(p, "")
 		}
-		fallthrough
+		// Not a local path (URL etc) → CLI fallback
+		return executeArg(cmd, args[0], os.Stdout)
 
-	// CLI
 	default:
 		for _, arg := range args {
 			if err := executeArg(cmd, arg, os.Stdout); err != nil {
@@ -427,7 +422,7 @@ func init() {
 }
 
 func tryLoadConfigFromDefaultPlaces() {
-	scope := gap.NewScope(gap.User, "glow")
+	scope := gap.NewScope(gap.User, "blow")
 	dirs, err := scope.ConfigDirs()
 	if err != nil {
 		fmt.Println("Could not load find configuration directory.")
@@ -438,7 +433,7 @@ func tryLoadConfigFromDefaultPlaces() {
 		dirs = append([]string{filepath.Join(c, "glow")}, dirs...)
 	}
 
-	if c := os.Getenv("GLOW_CONFIG_HOME"); c != "" {
+	if c := os.Getenv("BLOW_CONFIG_HOME"); c != "" {
 		dirs = append([]string{c}, dirs...)
 	}
 
@@ -446,9 +441,9 @@ func tryLoadConfigFromDefaultPlaces() {
 		viper.AddConfigPath(v)
 	}
 
-	viper.SetConfigName("glow")
+	viper.SetConfigName("blow")
 	viper.SetConfigType("yaml")
-	viper.SetEnvPrefix("glow")
+	viper.SetEnvPrefix("blow")
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {
