@@ -29,7 +29,7 @@ import (
 
 var (
 	// Version as provided by goreleaser or ldflags.
-	Version = "3.5.0"
+	Version = "3.6.0"
 	// CommitSHA as provided by goreleaser or ldflags.
 	CommitSHA = ""
 
