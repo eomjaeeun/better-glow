@@ -1,4 +1,4 @@
-module github.com/eomjaeeun/better-glow
+module github.com/eomjaeeun/better-glow/v3
 
 go 1.26.6
 

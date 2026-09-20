@@ -17,8 +17,8 @@ import (
 
 	"charm.land/glamour/v2"
 	"charm.land/glamour/v2/styles"
-	"github.com/eomjaeeun/better-glow/ui"
-	"github.com/eomjaeeun/better-glow/utils"
+	"github.com/eomjaeeun/better-glow/v3/ui"
+	"github.com/eomjaeeun/better-glow/v3/utils"
 	"github.com/caarlos0/env/v11"
 	"github.com/charmbracelet/log"
 	gap "github.com/muesli/go-app-paths"
@@ -29,7 +29,7 @@ import (
 
 var (
 	// Version as provided by goreleaser or ldflags.
-	Version = "3.1.5"
+	Version = "3.1.6"
 	// CommitSHA as provided by goreleaser or ldflags.
 	CommitSHA = ""
 
