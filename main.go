@@ -28,9 +28,9 @@ import (
 )
 
 var (
-	// Version as provided by goreleaser.
-	Version = ""
-	// CommitSHA as provided by goreleaser.
+	// Version as provided by goreleaser or ldflags.
+	Version = "3.3.0"
+	// CommitSHA as provided by goreleaser or ldflags.
 	CommitSHA = ""
 
 	readmeNames      = []string{"README.md", "README", "Readme.md", "Readme", "readme.md", "readme"}
