@@ -10,7 +10,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/glamour/v2"
-	"charm.land/glow/v3/utils"
+	"github.com/eomjaeeun/better-glow/utils"
 	"charm.land/lipgloss/v2"
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/log"

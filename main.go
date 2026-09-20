@@ -17,8 +17,8 @@ import (
 
 	"charm.land/glamour/v2"
 	"charm.land/glamour/v2/styles"
-	"charm.land/glow/v3/ui"
-	"charm.land/glow/v3/utils"
+	"github.com/eomjaeeun/better-glow/ui"
+	"github.com/eomjaeeun/better-glow/utils"
 	"github.com/caarlos0/env/v11"
 	"github.com/charmbracelet/log"
 	gap "github.com/muesli/go-app-paths"

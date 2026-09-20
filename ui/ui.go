@@ -9,7 +9,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/glow/v3/utils"
+	"github.com/eomjaeeun/better-glow/utils"
 	"github.com/charmbracelet/log"
 	"github.com/muesli/gitcha"
 )

@@ -1,4 +1,4 @@
-module charm.land/glow/v3
+module github.com/eomjaeeun/better-glow
 
 go 1.26.6
 
