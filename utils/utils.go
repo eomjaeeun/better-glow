@@ -2,6 +2,7 @@
 package utils
 
 import (
+	_ "embed"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -53,7 +54,6 @@ func IsMarkdownFile(filename string) bool {
 	ext := filepath.Ext(filename)
 
 	if ext == "" {
-		// By default, assume it's a markdown file.
 		return true
 	}
 
@@ -63,104 +63,17 @@ func IsMarkdownFile(filename string) bool {
 		}
 	}
 
-	// Has an extension but not markdown
-	// so assume this is a code file.
 	return false
 }
 
-// blowStyleConfig returns a Glamour style that uses only terminal-native
-// attributes (bold, italic, strikethrough, underline, color) with no
-// background colors on inline elements.
-func blowStyleConfig() ansi.StyleConfig {
-	t := true
-	codeColor := stringPtr("203")
-	return ansi.StyleConfig{
-		Document: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				BlockPrefix: "\n",
-				BlockSuffix: "\n",
-				Color:       stringPtr("252"),
-			},
-			Margin: uintPtr(2),
-		},
-		BlockQuote: ansi.StyleBlock{
-			Indent:      uintPtr(1),
-			IndentToken: stringPtr("│ "),
-		},
-		Heading: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				BlockSuffix: "\n",
-				Color:       stringPtr("39"),
-				Bold:        &t,
-			},
-		},
-		H1: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				Prefix: "# ",
-				Color:  stringPtr("228"),
-				Bold:   &t,
-			},
-		},
-		H2: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{Prefix: "## "},
-		},
-		H3: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{Prefix: "### "},
-		},
-		H4: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{Prefix: "#### "},
-		},
-		H5: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{Prefix: "##### "},
-		},
-		H6: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				Prefix: "###### ",
-				Color:  stringPtr("35"),
-			},
-		},
-		Strikethrough: ansi.StylePrimitive{CrossedOut: &t},
-		Emph:         ansi.StylePrimitive{Italic: &t},
-		Strong:       ansi.StylePrimitive{Bold: &t},
-		HorizontalRule: ansi.StylePrimitive{
-			Color:  stringPtr("240"),
-			Format: "\n--------\n",
-		},
-		Item:        ansi.StylePrimitive{BlockPrefix: "• "},
-		Enumeration: ansi.StylePrimitive{BlockPrefix: ". "},
-		Task: ansi.StyleTask{
-			Ticked:   "[✓] ",
-			Unticked: "[ ] ",
-		},
-		Link:     ansi.StylePrimitive{Color: stringPtr("30"), Underline: &t},
-		LinkText: ansi.StylePrimitive{Color: stringPtr("35"), Bold: &t},
-		Image:     ansi.StylePrimitive{Color: stringPtr("212"), Underline: &t},
-		ImageText: ansi.StylePrimitive{Color: stringPtr("243"), Format: "Image: {{.text}} →"},
-		Code: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				Prefix: " ",
-				Suffix: " ",
-				Color:  codeColor,
-			},
-		},
-		CodeBlock: ansi.StyleCodeBlock{
-			StyleBlock: ansi.StyleBlock{
-				StylePrimitive: ansi.StylePrimitive{Color: stringPtr("244")},
-				Margin:         uintPtr(2),
-			},
-		},
-		DefinitionDescription: ansi.StylePrimitive{BlockPrefix: "\n🠶 "},
-	}
-}
-
-func stringPtr(s string) *string { return &s }
-func uintPtr(u uint) *uint       { return &u }
+//go:embed blow.json
+var blowStyleJSON []byte
 
 // GlamourStyle returns a glamour.TermRendererOption based on the given style.
 func GlamourStyle(style string, isCode bool) glamour.TermRendererOption {
 	if !isCode {
 		if style == "auto" {
-			return glamour.WithStyles(blowStyleConfig())
+			return glamour.WithStylesFromJSONBytes(blowStyleJSON)
 		}
 		return glamour.WithStylePath(style)
 	}
@@ -169,7 +82,7 @@ func GlamourStyle(style string, isCode bool) glamour.TermRendererOption {
 
 	switch style {
 	case "auto":
-		styleConfig = blowStyleConfig()
+		return glamour.WithStylesFromJSONBytes(blowStyleJSON)
 	case styles.DarkStyle:
 		styleConfig = styles.DarkStyleConfig
 	case styles.LightStyle:
