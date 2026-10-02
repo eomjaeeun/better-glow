@@ -97,6 +97,9 @@ type model struct {
 	// Channel that receives paths to local markdown files
 	// (via the github.com/muesli/gitcha package)
 	localFileFinder chan gitcha.SearchResult
+
+	// Toggled on FocusMsg to force renderer redraw
+	focusRepaint bool
 }
 
 // unloadDocument unloads a document from the pager. Note that while this
@@ -188,6 +191,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case tea.FocusMsg:
+		m.focusRepaint = !m.focusRepaint
+		if m.state == stateShowDocument {
+			cmds = append(cmds, renderWithGlamour(m.pager, m.pager.currentDocument.Body))
+		}
+
 	case tea.BackgroundColorMsg:
 		m.common.styles = newStyles(msg.IsDark())
 		m.stash.stylePaginators(m.common.styles)
@@ -325,9 +334,14 @@ func (m model) View() tea.View {
 		content = m.stash.view()
 	}
 
+	if m.focusRepaint {
+		content += "\x1b[m"
+	}
+
 	v := tea.NewView(content)
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
+	v.ReportFocus = true
 	return v
 }
 
