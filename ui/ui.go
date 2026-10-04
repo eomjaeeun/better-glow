@@ -334,14 +334,15 @@ func (m model) View() tea.View {
 		content = m.stash.view()
 	}
 
-	if m.focusRepaint {
-		content += "\x1b[m"
-	}
-
 	v := tea.NewView(content)
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 	v.ReportFocus = true
+	if m.focusRepaint {
+		v.WindowTitle = "blow "
+	} else {
+		v.WindowTitle = "blow"
+	}
 	return v
 }
 
