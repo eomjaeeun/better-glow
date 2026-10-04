@@ -301,7 +301,9 @@ func (m pagerModel) update(msg tea.Msg) (pagerModel, tea.Cmd) {
 	// We've received terminal dimensions, either for the first time or
 	// after a resize
 	case tea.WindowSizeMsg:
-		log.Info("WindowSizeMsg", "width", msg.Width, "height", msg.Height)
+		if m.currentDocument.Body == "" {
+			return m, nil
+		}
 		return m, renderWithGlamour(m, m.currentDocument.Body)
 
 	case statusMessageTimeoutMsg:

@@ -189,13 +189,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
-	case tea.FocusMsg:
-		log.Info("FocusMsg received")
-		return m, tea.ClearScreen
-
-	case tea.BlurMsg:
-		log.Info("BlurMsg received")
-
 	case tea.BackgroundColorMsg:
 		m.common.styles = newStyles(msg.IsDark())
 		m.stash.stylePaginators(m.common.styles)
@@ -336,7 +329,6 @@ func (m model) View() tea.View {
 	v := tea.NewView(content)
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
-	v.ReportFocus = true
 	return v
 }
 
