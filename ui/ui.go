@@ -98,8 +98,6 @@ type model struct {
 	// (via the github.com/muesli/gitcha package)
 	localFileFinder chan gitcha.SearchResult
 
-	// Toggled on FocusMsg to force renderer redraw
-	focusRepaint bool
 }
 
 // unloadDocument unloads a document from the pager. Note that while this
@@ -192,10 +190,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.FocusMsg:
-		m.focusRepaint = !m.focusRepaint
-		if m.state == stateShowDocument {
-			cmds = append(cmds, renderWithGlamour(m.pager, m.pager.currentDocument.Body))
-		}
+		log.Info("FocusMsg received")
+		return m, tea.ClearScreen
+
+	case tea.BlurMsg:
+		log.Info("BlurMsg received")
 
 	case tea.BackgroundColorMsg:
 		m.common.styles = newStyles(msg.IsDark())
@@ -338,11 +337,6 @@ func (m model) View() tea.View {
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 	v.ReportFocus = true
-	if m.focusRepaint {
-		v.WindowTitle = "blow "
-	} else {
-		v.WindowTitle = "blow"
-	}
 	return v
 }
 
