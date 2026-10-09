@@ -98,6 +98,8 @@ type model struct {
 	// (via the github.com/muesli/gitcha package)
 	localFileFinder chan gitcha.SearchResult
 
+	singleFile bool
+
 }
 
 // unloadDocument unloads a document from the pager. Note that while this
@@ -131,6 +133,7 @@ func newModel(cfg Config, content string) tea.Model {
 	path := cfg.Path
 	if path == "" && content != "" {
 		m.state = stateShowDocument
+		m.singleFile = true
 		m.pager.currentDocument = markdown{Body: content}
 		return m
 	}
@@ -149,6 +152,7 @@ func newModel(cfg Config, content string) tea.Model {
 	} else {
 		cwd, _ := os.Getwd()
 		m.state = stateShowDocument
+		m.singleFile = true
 		m.pager.currentDocument = markdown{
 			localPath: path,
 			Note:      stripAbsolutePath(path, cwd),
@@ -203,6 +207,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				break // let pager handle: cancel search or clear results
 			}
 			if m.state == stateShowDocument || m.stash.viewState == stashStateLoadingDocument {
+				if m.singleFile {
+					return m, tea.Quit
+				}
 				batch := m.unloadDocument()
 				return m, tea.Batch(batch...)
 			}
@@ -239,6 +246,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				break // let pager handle during search input
 			}
 			if m.state == stateShowDocument {
+				if m.singleFile {
+					return m, tea.Quit
+				}
 				cmds = append(cmds, m.unloadDocument()...)
 				return m, tea.Batch(cmds...)
 			}
