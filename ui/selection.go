@@ -26,19 +26,39 @@ func normalizeSelection(a, b selectionPos) (start, end selectionPos) {
 
 func stripAnsi(s string) string {
 	var b strings.Builder
-	inEsc := false
-	for _, r := range s {
-		if r == '\033' {
-			inEsc = true
-			continue
-		}
-		if inEsc {
-			if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
-				inEsc = false
+	runes := []rune(s)
+	i := 0
+	for i < len(runes) {
+		if runes[i] == '\033' {
+			i++
+			if i < len(runes) && runes[i] == ']' {
+				// OSC sequence: skip until BEL or ST (\033\\)
+				i++
+				for i < len(runes) {
+					if runes[i] == '\a' {
+						i++
+						break
+					}
+					if runes[i] == '\033' && i+1 < len(runes) && runes[i+1] == '\\' {
+						i += 2
+						break
+					}
+					i++
+				}
+			} else {
+				// CSI/SGR sequence: skip until letter
+				for i < len(runes) {
+					r := runes[i]
+					i++
+					if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
+						break
+					}
+				}
 			}
 			continue
 		}
-		b.WriteRune(r)
+		b.WriteRune(runes[i])
+		i++
 	}
 	return b.String()
 }
@@ -49,28 +69,50 @@ func stripAnsi(s string) string {
 func highlightLine(line string, startCol, endCol int) string {
 	var result strings.Builder
 	displayPos := 0
-	inEsc := false
 	highlighted := false
+	runes := []rune(line)
+	i := 0
 
-	for _, r := range line {
-		if r == '\033' {
-			inEsc = true
-			result.WriteRune(r)
-			continue
-		}
-		if inEsc {
-			result.WriteRune(r)
-			if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
-				inEsc = false
-				// Re-apply selection background after any SGR sequence (e.g. \033[0m)
-				if highlighted && r == 'm' {
+	for i < len(runes) {
+		if runes[i] == '\033' {
+			if i+1 < len(runes) && runes[i+1] == ']' {
+				// OSC sequence: copy verbatim until BEL or ST
+				for i < len(runes) {
+					result.WriteRune(runes[i])
+					if runes[i] == '\a' {
+						i++
+						break
+					}
+					if runes[i] == '\033' && i+1 < len(runes) && runes[i+1] == '\\' {
+						result.WriteRune(runes[i+1])
+						i += 2
+						break
+					}
+					i++
+				}
+				if highlighted {
 					result.WriteString(selBgOn)
+				}
+				continue
+			}
+			// CSI/SGR sequence: copy verbatim until letter
+			result.WriteRune(runes[i])
+			i++
+			for i < len(runes) {
+				r := runes[i]
+				result.WriteRune(r)
+				i++
+				if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
+					if highlighted && r == 'm' {
+						result.WriteString(selBgOn)
+					}
+					break
 				}
 			}
 			continue
 		}
 
-		w := runewidth.RuneWidth(r)
+		w := runewidth.RuneWidth(runes[i])
 
 		if !highlighted && displayPos >= startCol {
 			result.WriteString(selBgOn)
@@ -81,8 +123,9 @@ func highlightLine(line string, startCol, endCol int) string {
 			highlighted = false
 		}
 
-		result.WriteRune(r)
+		result.WriteRune(runes[i])
 		displayPos += w
+		i++
 	}
 
 	if highlighted {
@@ -110,28 +153,51 @@ func highlightRanges(line string, ranges []hlRange) string {
 
 	var result strings.Builder
 	displayPos := 0
-	inEsc := false
 	rangeIdx := 0
 	active := false
+	runes := []rune(line)
+	i := 0
 
-	for _, r := range line {
-		if r == '\033' {
-			inEsc = true
-			result.WriteRune(r)
-			continue
-		}
-		if inEsc {
-			result.WriteRune(r)
-			if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
-				inEsc = false
-				if active && r == 'm' && rangeIdx < len(ranges) {
+	for i < len(runes) {
+		if runes[i] == '\033' {
+			if i+1 < len(runes) && runes[i+1] == ']' {
+				// OSC sequence: copy verbatim
+				for i < len(runes) {
+					result.WriteRune(runes[i])
+					if runes[i] == '\a' {
+						i++
+						break
+					}
+					if runes[i] == '\033' && i+1 < len(runes) && runes[i+1] == '\\' {
+						result.WriteRune(runes[i+1])
+						i += 2
+						break
+					}
+					i++
+				}
+				if active && rangeIdx < len(ranges) {
 					result.WriteString(ranges[rangeIdx].On)
+				}
+				continue
+			}
+			// CSI/SGR sequence
+			result.WriteRune(runes[i])
+			i++
+			for i < len(runes) {
+				r := runes[i]
+				result.WriteRune(r)
+				i++
+				if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
+					if active && r == 'm' && rangeIdx < len(ranges) {
+						result.WriteString(ranges[rangeIdx].On)
+					}
+					break
 				}
 			}
 			continue
 		}
 
-		w := runewidth.RuneWidth(r)
+		w := runewidth.RuneWidth(runes[i])
 
 		if active && rangeIdx < len(ranges) && displayPos >= ranges[rangeIdx].End {
 			result.WriteString(ranges[rangeIdx].Off)
@@ -144,8 +210,9 @@ func highlightRanges(line string, ranges []hlRange) string {
 			active = true
 		}
 
-		result.WriteRune(r)
+		result.WriteRune(runes[i])
 		displayPos += w
+		i++
 	}
 
 	if active && rangeIdx < len(ranges) {
