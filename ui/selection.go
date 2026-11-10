@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"os"
 	"strings"
 
 	runewidth "github.com/mattn/go-runewidth"
@@ -11,6 +12,31 @@ const (
 	selBgOn  = "\033[48;5;24m"
 	selBgOff = "\033[49m"
 )
+
+var selWidth = &runewidth.Condition{
+	EastAsianWidth:     detectEastAsian(),
+	StrictEmojiNeutral: true,
+}
+
+func detectEastAsian() bool {
+	if v := os.Getenv("RUNEWIDTH_EASTASIAN"); v == "1" || v == "true" {
+		return true
+	}
+	for _, key := range []string{"LC_CTYPE", "LC_ALL", "LANG"} {
+		if v := os.Getenv(key); v != "" {
+			for _, prefix := range []string{"ko", "ja", "zh"} {
+				if len(v) >= 2 && strings.EqualFold(v[:2], prefix) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func cellWidth(r rune) int {
+	return selWidth.RuneWidth(r)
+}
 
 type selectionPos struct {
 	Line int // absolute content line (viewport offset + visible line index)
@@ -112,7 +138,7 @@ func highlightLine(line string, startCol, endCol int) string {
 			continue
 		}
 
-		w := runewidth.RuneWidth(runes[i])
+		w := cellWidth(runes[i])
 
 		if !highlighted && displayPos >= startCol {
 			result.WriteString(selBgOn)
@@ -197,7 +223,7 @@ func highlightRanges(line string, ranges []hlRange) string {
 			continue
 		}
 
-		w := runewidth.RuneWidth(runes[i])
+		w := cellWidth(runes[i])
 
 		if active && rangeIdx < len(ranges) && displayPos >= ranges[rangeIdx].End {
 			result.WriteString(ranges[rangeIdx].Off)
@@ -228,7 +254,7 @@ func substringByWidth(s string, startWidth, endWidth int) string {
 	var result strings.Builder
 	pos := 0
 	for _, r := range s {
-		w := runewidth.RuneWidth(r)
+		w := cellWidth(r)
 		if endWidth >= 0 && pos >= endWidth {
 			break
 		}
